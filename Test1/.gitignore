@@ -1,0 +1,13 @@
+.env*
+*.gpg
+*.user
+*.local.json
+
+.vs
+
+package-lock.json
+
+Test1/bin
+Test1/obj
+Test1.Tests/bin
+Test1.Tests/obj
