@@ -9,7 +9,7 @@ using Test1.Models;
 
 namespace Test1.Controllers
 {
-    [ApiController] 
+    [ApiController]
     [Route("api/[controller]")]
     public class LocationsController : ControllerBase
     {
@@ -26,20 +26,39 @@ namespace Test1.Controllers
         {
             await using var dbContext = await _sessionFactory.CreateContextAsync(cancellationToken)
                 .ConfigureAwait(false);
-
+            // SQL query to select all locations along with the count of active accounts
+            // Active accounts are defined as those with a status less than CANCELLED
+            // LEFT JOIN is used to include locations with zero active accounts
+            // GROUP BY is used to aggregate the results by location
+            // COUNT(acc.UID) counts the number of active accounts per location
+            // The result includes location details and the count of active accounts
+            // This provides a comprehensive view of each location and its associated active accounts
             const string sql = @"
-SELECT
-    Guid,
-    Name,
-    Address,
-    City,
-    Locale,
-    PostalCode
-FROM location;";
+                                SELECT
+                                    loc.Guid,
+                                    loc.Name,
+                                    loc.Address,
+                                    loc.City,
+                                    loc.Locale,
+                                    loc.PostalCode,
+                                    COUNT(acc.UID) AS ActiveAccountCount
+                                FROM location loc
+                                LEFT JOIN account acc 
+                                    ON acc.LocationUid = loc.UID AND acc.Status < @CANCELLED
+                                GROUP BY
+                                    loc.Guid,
+                                    loc.Name,
+                                    loc.Address,
+                                    loc.City,
+                                    loc.Locale,
+                                    loc.PostalCode";
 
             var builder = new SqlBuilder();
 
-            var template = builder.AddTemplate(sql);
+            var template = builder.AddTemplate(sql, new
+            {
+                CANCELLED = (int)AccountStatusType.CANCELLED
+            });
 
             var rows = await dbContext.Session.QueryAsync<LocationDto>(template.RawSql, template.Parameters, dbContext.Transaction)
                 .ConfigureAwait(false);
@@ -57,15 +76,15 @@ FROM location;";
                 .ConfigureAwait(false);
 
             const string sql = @"
-SELECT
-    Guid,
-    Name,
-    Address,
-    City,
-    Locale,
-    PostalCode
-FROM location
-/**where**/;";
+                SELECT
+                    Guid,
+                    Name,
+                    Address,
+                    City,
+                    Locale,
+                    PostalCode
+                FROM location
+                /**where**/;";
 
             var builder = new SqlBuilder();
 
@@ -92,29 +111,29 @@ FROM location
                 .ConfigureAwait(false);
 
             const string sql = @"
-INSERT INTO location (
-    Guid,
-    CreatedUtc,
-    Disabled,
-    EnableBilling,
-    AccountStatus,
-    Name,
-    Address,
-    City,
-    Locale,
-    PostalCode
-) VALUES (
-    @Guid,
-    @CreatedUtc,
-    @Disabled,
-    @EnableBilling,
-    @AccountStatus,
-    @Name,
-    @Address,
-    @City,
-    @Locale,
-    @PostalCode
-);";
+                INSERT INTO location (
+                    Guid,
+                    CreatedUtc,
+                    Disabled,
+                    EnableBilling,
+                    AccountStatus,
+                    Name,
+                    Address,
+                    City,
+                    Locale,
+                    PostalCode
+                ) VALUES (
+                    @Guid,
+                    @CreatedUtc,
+                    @Disabled,
+                    @EnableBilling,
+                    @AccountStatus,
+                    @Name,
+                    @Address,
+                    @City,
+                    @Locale,
+                    @PostalCode
+                );";
 
             var builder = new SqlBuilder();
 
@@ -170,14 +189,17 @@ INSERT INTO location (
                 return BadRequest("Unable to delete location");
         }
 
-        public class LocationDto 
+        public class LocationDto
         {
-            public Guid Guid {get;set;}
-            public string Name {get;set;}
-            public string Address {get;set;}
-            public string City {get;set;}
-            public string Locale {get;set;}
-            public string PostalCode {get;set;}
+            public Guid Guid { get; set; }
+            public string Name { get; set; }
+            public string Address { get; set; }
+            public string City { get; set; }
+            public string Locale { get; set; }
+            public string PostalCode { get; set; }
+
+            // New property to hold the count of active accounts
+            public int ActiveAccountCount { get; set; }
         }
     }
 }
